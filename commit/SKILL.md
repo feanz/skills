@@ -13,6 +13,6 @@ description: Create a git commit using conventional commits format
 ## Your task
 
 Based on the above changes, create a single git commit.
-The commit message should follow the conventional commits format
+The commit message should follow the conventional commits format. Include any tickets or issues resolved in message e.g. resolves #{ticket-number}
 
 You have the capability to call multiple tools in a single response. Stage and create the commit using a single message. Do not use any other tools or do anything else. Do not send any other text or messages besides these tool calls.
