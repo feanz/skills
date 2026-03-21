@@ -1,6 +1,7 @@
 ---
+name: commit
+description: Create a git commit using conventional commits format
 allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git commit:*)
-description: Create a git commit
 ---
 
 ## Context
