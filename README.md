@@ -20,11 +20,11 @@ npx skills add feanz/skills
 To install a specific skill:
 
 ```bash
-npx skills add feanz/skills --skill commit
+npx skills add feanz/skills/commit
 ```
 
 ```bash
-npx skills add feanz/skills --skill commit-push-pr
+npx skills add feanz/skills/commit-push-pr
 ```
 
 ## Usage
