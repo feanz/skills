@@ -21,6 +21,9 @@ To install a specific skill:
 
 ```bash
 npx skills add feanz/skills --skill commit
+```
+
+```bash
 npx skills add feanz/skills --skill commit-push-pr
 ```
 
