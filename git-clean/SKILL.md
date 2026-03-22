@@ -9,30 +9,10 @@ You need to execute the following bash commands to clean up stale local branches
 
 ## Commands to Execute
 
-1. **First, checkout main**
+1. **First, run git branch cleanup**
    Execute this command:
    ```bash
-   git checkout main
-   ```
-
-2. **Next, get latest**
-   Execute this command:
-   ```bash
-   git up
-   ```
-
-3. **Next, list branches to identify any with [gone] status**
-   Execute this command:
-   ```bash
-   git branch -v
-   ```
-   
-   Note: Branches with a '+' prefix have associated worktrees and must have their worktrees removed before deletion.
-
-4. **Next, identify worktrees that need to be removed for [gone] branches**
-   Execute this command:
-   ```bash
-   git worktree list
+   git bdone
    ```
 
 5. **Finally, remove worktrees and delete [gone] branches (handles both regular and worktree branches)**
@@ -47,9 +27,6 @@ You need to execute the following bash commands to clean up stale local branches
        echo "  Removing worktree: $worktree"
        git worktree remove --force "$worktree"
      fi
-     # Delete the branch
-     echo "  Deleting branch: $branch"
-     git branch -D "$branch"
    done
    ```
 
