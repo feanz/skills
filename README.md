@@ -1,6 +1,6 @@
 # Skills
 
-A collection of [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skills for common git workflows.
+A collection of [Agent Code] skills for common git workflows.
 
 ## Available Skills
 
@@ -11,6 +11,7 @@ A collection of [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sk
 | `azure-prod-performance-report` | Create a markdown report of significant performance issues in the last week in production azure |
 | `commit` | Create a git commit using conventional commits format |
 | `commit-push-pr` | Commit, push, and open a PR in one step |
+| `file-pr` | Prepare current changes and open a focused GitHub pull request |
 | `git-clean` | Cleans up all git branches marked as [gone], including removing associated worktrees |
 
 ## Installation
@@ -44,6 +45,10 @@ npx skills add feanz/skills/commit-push-pr
 ```
 
 ```bash
+npx skills add feanz/skills/file-pr
+```
+
+```bash
 npx skills add feanz/skills/git-clean
 ```
 
@@ -57,5 +62,6 @@ Once installed, invoke a skill in Claude Code with the slash command:
 /azure-prod-performance-report
 /commit
 /commit-push-pr
+/file-pr
 /git-clean
 ```

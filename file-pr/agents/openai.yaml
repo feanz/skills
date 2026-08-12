@@ -1,0 +1,4 @@
+interface:
+  display_name: "File a Pull Request"
+  short_description: "Prepare and open a focused GitHub pull request"
+  default_prompt: "Use $file-pr to prepare the current changes and open a focused GitHub pull request."
