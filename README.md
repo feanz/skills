@@ -11,7 +11,7 @@ A collection of [Agent Code] skills for common git workflows.
 | `azure-prod-performance-report` | Create a markdown report of significant performance issues in the last week in production azure |
 | `commit` | Create a git commit using conventional commits format |
 | `commit-push-pr` | Commit, push, and open a PR in one step |
-| `file-pr` | Prepare current changes and open a focused GitHub pull request |
+| `file-pr` | File a concise pull request for the current branch |
 | `git-clean` | Cleans up all git branches marked as [gone], including removing associated worktrees |
 
 ## Installation
