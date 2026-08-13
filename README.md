@@ -9,6 +9,7 @@ A collection of [Agent Code] skills for common git workflows.
 | `azure-cost-report` | Create a markdown report of costs for the current month in production azure |
 | `azure-prod-alert-report` | Create a markdown report of significant alerts in the last week in production azure |
 | `azure-prod-performance-report` | Create a markdown report of significant performance issues in the last week in production azure |
+| `babysit-pr` | Monitor a pull request through review and CI until it is ready |
 | `commit` | Create a git commit using conventional commits format |
 | `commit-push-pr` | Commit, push, and open a PR in one step |
 | `file-pr` | File a concise pull request for the current branch |
@@ -23,6 +24,10 @@ npx skills add feanz/skills
 ```
 
 To install a specific skill:
+
+```bash
+npx skills add feanz/skills/babysit-pr
+```
 
 ```bash
 npx skills add feanz/skills/azure-cost-report
@@ -57,6 +62,7 @@ npx skills add feanz/skills/git-clean
 Once installed, invoke a skill in Claude Code with the slash command:
 
 ```
+/babysit-pr
 /azure-cost-report
 /azure-prod-alert-report
 /azure-prod-performance-report
