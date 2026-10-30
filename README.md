@@ -13,7 +13,10 @@ A collection of [Agent Code] skills for common git workflows.
 | `commit` | Create a git commit using conventional commits format |
 | `commit-push-pr` | Commit, push, and open a PR in one step |
 | `file-pr` | File a concise pull request for the current branch |
+| `full-send` | Implement, verify, review, and merge a pull request |
+| `full-stop` | Implement, verify, and review a pull request without merging |
 | `git-clean` | Cleans up all git branches marked as [gone], including removing associated worktrees |
+| `sol-loop` | Review code with Sol in a bounded feedback loop |
 
 ## Installation
 
@@ -57,6 +60,18 @@ npx skills add feanz/skills/file-pr
 npx skills add feanz/skills/git-clean
 ```
 
+```bash
+npx skills add feanz/skills/sol-loop
+```
+
+```bash
+npx skills add feanz/skills/full-send
+```
+
+```bash
+npx skills add feanz/skills/full-stop
+```
+
 ## Usage
 
 Once installed, invoke a skill in Claude Code with the slash command:
@@ -70,4 +85,11 @@ Once installed, invoke a skill in Claude Code with the slash command:
 /commit-push-pr
 /file-pr
 /git-clean
+/sol-loop
+/full-send
+/full-stop
 ```
+
+## Attribution
+
+`sol-loop`, `full-send`, and `full-stop` come from Theo Browne's [tstack](https://github.com/t3dotgg/tstack) and are distributed under its MIT license. See [third-party notices](THIRD_PARTY_NOTICES.md) for the pinned source revision and license. `full-send` and `full-stop` also use this repository's `file-pr` and `babysit-pr` skills.
