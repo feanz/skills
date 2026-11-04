@@ -1,7 +1,7 @@
 # Third-party notices
 
 The skills in `file-pr/`, `babysit-pr/`, `sol-loop/`, `full-send/`, `full-stop/`,
-and `leaving-pr-comments/` are sourced from
+`council/`, and `leaving-pr-comments/` are sourced from
 [t3dotgg/tstack](https://github.com/t3dotgg/tstack/tree/1085050f3baed1ac724caa4a8166145fb2ac88af/skills),
 revision `1085050f3baed1ac724caa4a8166145fb2ac88af`, verified against upstream
 `main` on 4 November 2026. This includes the `babysit-pr/scripts/pr-wait`
@@ -18,7 +18,7 @@ metadata is retained; upstream does not supply those two files.
 [this video](https://www.youtube.com/watch?v=5Bmp9cz1JN8&t=257s).
 These are the published source files, not a transcript of the video.
 
-The following upstream license applies to the six imported skills. A copy is
+The following upstream license applies to the seven imported skills. A copy is
 also included in each skill directory for individual installations:
 
 ```text

@@ -12,6 +12,7 @@ A collection of agent skills for git workflows and Azure reporting.
 | `babysit-pr` | Monitor a pull request through review and CI until it is ready |
 | `commit` | Create a git commit using conventional commits format |
 | `commit-push-pr` | Commit, push, and open a PR in one step |
+| `council` | Review or get feedback from three models across different providers |
 | `file-pr` | File a concise pull request for the current branch |
 | `full-send` | Implement, verify, review, and merge a pull request |
 | `full-stop` | Implement, verify, and review a pull request without merging |
@@ -35,13 +36,13 @@ revision and the one intentional customization.
 To install the complete workflow bundle, including its dependencies:
 
 ```bash
-npx skills add feanz/skills --skill file-pr babysit-pr sol-loop full-send full-stop leaving-pr-comments
+npx skills add feanz/skills --skill file-pr babysit-pr sol-loop full-send full-stop leaving-pr-comments council
 ```
 
 To use Theo's unmodified versions and track his repository directly instead:
 
 ```bash
-npx skills add t3dotgg/tstack --skill file-pr babysit-pr sol-loop full-send full-stop leaving-pr-comments
+npx skills add t3dotgg/tstack --skill file-pr babysit-pr sol-loop full-send full-stop leaving-pr-comments council
 ```
 
 Choose one source for these names; do not install both copies. Direct upstream
@@ -76,6 +77,10 @@ npx skills add feanz/skills/commit-push-pr
 ```
 
 ```bash
+npx skills add feanz/skills/council
+```
+
+```bash
 npx skills add feanz/skills/file-pr
 ```
 
@@ -104,6 +109,8 @@ npx skills add feanz/skills/leaving-pr-comments
 - `full-send` uses `sol-loop`, `file-pr`, and `babysit-pr`.
 - `full-stop` uses `full-send` and therefore its dependencies.
 - `file-pr` and `babysit-pr` use `leaving-pr-comments`.
+- `council` requires a harness that can delegate to models from three different
+  providers; it reports unavailable providers rather than substituting them.
 - Outside T3 Code, `babysit-pr` uses its bundled executable `scripts/pr-wait`
   and requires Python 3 and an authenticated GitHub CLI (`gh`).
 
@@ -128,6 +135,7 @@ Once installed, invoke a skill in Claude Code with the slash command:
 /azure-prod-performance-report
 /commit
 /commit-push-pr
+/council
 /file-pr
 /git-clean
 /leaving-pr-comments
@@ -141,7 +149,7 @@ Once installed, invoke a skill in Claude Code with the slash command:
 The upstream bundle is pinned to t3dotgg/tstack revision
 `1085050f3baed1ac724caa4a8166145fb2ac88af`, verified against `main` on
 4 November 2026. It includes `file-pr`, `babysit-pr`, `sol-loop`, `full-send`,
-`full-stop`, and the required `leaving-pr-comments` helper, with upstream scripts
+`full-stop`, `council`, and the required `leaving-pr-comments` helper, with upstream scripts
 and agent metadata. Existing local `file-pr` and `babysit-pr` UI metadata is retained.
 
 The only instruction customization is in `sol-loop/SKILL.md`: use the latest
@@ -149,7 +157,7 @@ available Sol at **high effort** unless the user chooses another effort, and
 report when high effort is unavailable. This preserves the intentional local
 preference rather than silently reverting it during synchronization.
 
-For a future refresh, compare the six complete upstream skill directories at a
+For a future refresh, compare the seven complete upstream skill directories at a
 new pinned revision, including scripts and `agents/` files; preserve that Sol
 preference and the existing local UI metadata. Update this revision and the
 third-party notices together. Keep a copy of the upstream license inside each
@@ -158,7 +166,7 @@ for new dependencies before publishing.
 
 `full-send` and `full-stop` instructions already match this revision; their
 missing agent metadata is included in this refresh. The other upstream skills
-(`council`, `takeover`, and `modernize`) have no local equivalents and are not
+(`takeover` and `modernize`) have no local equivalents and are not
 imported. `commit`, `commit-push-pr`, `git-clean`, and the Azure reporting skills
 remain unchanged.
 
@@ -174,7 +182,7 @@ its pinned copies are refreshed. These commands are manual, not an automatic syn
 
 ## Attribution
 
-The six workflow skills listed under upstream maintenance come from Theo Browne's
+The seven workflow skills listed under upstream maintenance come from Theo Browne's
 [tstack](https://github.com/t3dotgg/tstack) and are distributed under its MIT
 license. See [third-party notices](THIRD_PARTY_NOTICES.md) for provenance and the
 license. Each imported skill also includes its own copy of that license.
