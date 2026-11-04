@@ -1,10 +1,25 @@
 # Third-party notices
 
-The skills in `sol-loop/`, `full-send/`, and `full-stop/` are reproduced unchanged from [t3dotgg/tstack](https://github.com/t3dotgg/tstack/tree/1085050f3baed1ac724caa4a8166145fb2ac88af/skills), revision `1085050f3baed1ac724caa4a8166145fb2ac88af`, retrieved on 30 October 2026.
+The skills in `file-pr/`, `babysit-pr/`, `sol-loop/`, `full-send/`, `full-stop/`,
+and `leaving-pr-comments/` are sourced from
+[t3dotgg/tstack](https://github.com/t3dotgg/tstack/tree/1085050f3baed1ac724caa4a8166145fb2ac88af/skills),
+revision `1085050f3baed1ac724caa4a8166145fb2ac88af`, verified against upstream
+`main` on 4 November 2026. This includes the `babysit-pr/scripts/pr-wait`
+executable and upstream `agents/openai.yaml` files where supplied.
 
-They were featured in [this video](https://www.youtube.com/watch?v=5Bmp9cz1JN8&t=257s); these are the published source files, not a transcript of the video.
+All imported files are unchanged from that revision except `sol-loop/SKILL.md`,
+which retains this repository's preference for high effort unless the user
+specifies another effort, and reporting when high effort is unavailable.
+The local `file-pr/agents/openai.yaml` and `babysit-pr/agents/openai.yaml`
+metadata is retained; upstream does not supply those two files.
 
-The following upstream license applies to those three skills:
+`sol-loop`, `full-send`, and `full-stop` were originally imported on 30 October
+2026 after being featured in
+[this video](https://www.youtube.com/watch?v=5Bmp9cz1JN8&t=257s).
+These are the published source files, not a transcript of the video.
+
+The following upstream license applies to the six imported skills. A copy is
+also included in each skill directory for individual installations:
 
 ```text
 MIT License
