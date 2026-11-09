@@ -9,7 +9,10 @@ executable and upstream `agents/openai.yaml` files where supplied.
 
 All imported files are unchanged from that revision except `sol-loop/SKILL.md`,
 which retains this repository's preference for high effort unless the user
-specifies another effort, and reporting when high effort is unavailable.
+specifies another effort, and reporting when high effort is unavailable, and
+`babysit-pr/SKILL.md`, which adds Azure DevOps support. The
+`babysit-pr/scripts/pr-wait-azure-devops` script is original to this
+repository, not imported.
 The local `file-pr/agents/openai.yaml` and `babysit-pr/agents/openai.yaml`
 metadata is retained; upstream does not supply those two files.
 

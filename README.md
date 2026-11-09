@@ -152,14 +152,21 @@ The upstream bundle is pinned to t3dotgg/tstack revision
 `full-stop`, `council`, and the required `leaving-pr-comments` helper, with upstream scripts
 and agent metadata. Existing local `file-pr` and `babysit-pr` UI metadata is retained.
 
-The only instruction customization is in `sol-loop/SKILL.md`: use the latest
-available Sol at **high effort** unless the user chooses another effort, and
-report when high effort is unavailable. This preserves the intentional local
-preference rather than silently reverting it during synchronization.
+There are two local customizations:
+
+- `sol-loop/SKILL.md`: use the latest available Sol at **high effort** unless
+  the user chooses another effort, and report when high effort is unavailable.
+- `babysit-pr`: Azure DevOps support. `scripts/pr-wait-azure-devops` is a local
+  addition that waits on Azure DevOps branch policy evaluations, and
+  `babysit-pr/SKILL.md` chooses it for Azure DevOps PRs. The upstream
+  `scripts/pr-wait` is unchanged.
+
+These preserve intentional local behavior rather than silently reverting it
+during synchronization.
 
 For a future refresh, compare the seven complete upstream skill directories at a
-new pinned revision, including scripts and `agents/` files; preserve that Sol
-preference and the existing local UI metadata. Update this revision and the
+new pinned revision, including scripts and `agents/` files; preserve both
+customizations and the existing local UI metadata. Update this revision and the
 third-party notices together. Keep a copy of the upstream license inside each
 skill so individual installations retain attribution. Check the upstream README
 for new dependencies before publishing.

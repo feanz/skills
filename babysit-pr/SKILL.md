@@ -14,6 +14,15 @@ Never write your own watcher, polling loop, or `sleep` loop. Use one watcher
 per PR: `watch_pull_request` in T3 Code, `pr-wait` everywhere else. Never run
 both on the same PR. Every watcher on a GitHub account shares one rate limit.
 
+Check the PR's host first. GitHub PRs follow the sections below as written.
+Azure DevOps PRs (`dev.azure.com` or `*.visualstudio.com`) keep their required
+checks in branch policy evaluations, which `watch_pull_request` and `pr-wait`
+do not read. For them, wait on checks with `scripts/pr-wait-azure-devops` in
+every harness. In T3 Code, also call `watch_pull_request` for comments and
+conflicts, then run `pr-wait-azure-devops <pr> --until green` as one background
+command, so its exit wakes you when the required checks pass or fail. This pair
+is the one exception to "never run both".
+
 ### In T3 Code: `watch_pull_request`
 
 Handle the existing checks and comments first. Then call
@@ -54,7 +63,24 @@ unresolved threads, PR closed), and 2 on bad input.
   Macroscope.
 - `any-change`: exit on the first event.
 
-In Claude Code, run it with the Monitor tool (`timeout_ms: 3600000`), so each
+`pr-wait` needs a Unix-like OS. On native Windows, use T3 Code's watcher or
+run it under WSL.
+
+For Azure DevOps, use `scripts/pr-wait-azure-devops` the same way. It needs
+the Azure CLI with the `azure-devops` extension, signed in with `az login` or
+`az devops login`.
+
+```bash
+pr-wait-azure-devops <pr> [--org https://dev.azure.com/org] [--until ready|green|any-change]
+```
+
+Its exit codes and `--until` modes match `pr-wait`. `green` means every
+blocking build and status policy passed on the current head. `ready` also needs
+every other blocking policy (reviewers, comment resolution, work items), no
+active threads, and a merge without conflicts. Azure DevOps has no Greptile or
+Macroscope wait.
+
+In Claude Code, run either script with the Monitor tool (`timeout_ms: 3600000`), so each
 line wakes you. Without a monitor, run it as one long command. It ends on its
 own.
 
@@ -105,6 +131,11 @@ Keep an eye on changes to `main` and rebase when needed. `pr-wait` reports when
 new base commits touch this PR's files, and when the PR becomes BEHIND or DIRTY.
 `watch_pull_request` reports conflicts only, so check for BEHIND yourself
 before you call the PR ready.
+Azure DevOps has no BEHIND state. Instead, a build policy can expire when the
+target branch moves, and completion then fails until the builds run again.
+`pr-wait-azure-devops` counts expired results and results from an older commit
+as pending, and reports when target commits touch this PR's files. Right
+before completing, read the policies again with `az repos pr policy list`.
 If an overlapping PR makes this one obsolete, stop monitoring, report it to the
 user, and ask before closing the PR unless closure was explicitly authorized.
 

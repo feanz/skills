@@ -1,0 +1,480 @@
+#!/usr/bin/env python3
+"""pr-wait-azure-devops: watch one Azure DevOps pull request and print one line
+per real event. It mirrors pr-wait, which covers GitHub.
+
+  pr-wait-azure-devops <pr> [--org https://dev.azure.com/org] [--until green|ready|any-change] [--interval 30]
+
+<pr> is a PR number or PR URL. Without --org, the organization comes from the
+URL or from the current checkout's origin remote. Stdout carries only events,
+one line each, so a monitor wakes the agent once per real event. Progress and
+errors that do not end the run go to stderr. Requires the Azure CLI with the
+azure-devops extension, signed in (`az login` or `az devops login`).
+
+Azure DevOps keeps required build results in branch policy evaluations, not
+in PR statuses, so this reads the evaluations for the PR's current source
+commit. An evaluation from an older commit, or one that expired because the
+target branch moved, counts as pending.
+
+--until
+  green       every blocking build and status policy passed on the current
+              head (every build policy when none is blocking)
+  ready       green, every other blocking policy (reviewers, comment
+              resolution, work items) passed, no thread is active, and the
+              merge has no conflicts (default)
+  any-change  stop after the first poll that prints an event
+
+Exit codes
+  0  the --until condition is met, or the PR completed
+  1  the condition cannot be met without action: a blocking policy failed, the
+     merge conflicts, the PR was abandoned, `ready` is blocked by active threads
+     or a rejected policy, or Azure DevOps stayed unreachable
+  2  bad arguments, unknown PR, or another watcher already watches this PR
+
+Events
+  - a blocking policy failed (name and build link)
+  - all policies finished on the head (one summary line)
+  - a new comment, thread, or thread reply from someone other than the PR
+    author or the signed-in user, and reviewer votes that reject or wait
+  - the target branch moved and the new commits touch files in this PR
+  - the merge started conflicting
+  - the PR completed or was abandoned
+
+Non-blocking (advisory) policies are reported but never waited on. System
+comments (votes, pushes, policy updates) are never events.
+
+State lives in ~/.local/state/pr-wait/, shared with pr-wait. A lock makes a
+second watcher for the same PR exit at once. The first run for a PR records
+what already exists and reports only what comes after.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any, NoReturn
+from urllib.parse import quote
+
+STATE_DIR = Path.home() / ".local" / "state" / "pr-wait"
+STALE_STATE_SECONDS = 6 * 3600
+MAX_FAILED_POLLS = 10
+TRANSIENT = re.compile(
+    r"\b(5\d\d|429)\b|rate limit|timed? ?out|connection (reset|refused|aborted)|"
+    r"temporar|could not resolve|name resolution|TLS|SSL|EOF",
+    re.IGNORECASE,
+)
+# Policy types that report CI. Other blocking policies gate `ready`, not `green`.
+CHECK_POLICY_TYPES = ("build", "status")
+PASSED = ("approved", "notapplicable")
+FAILED = ("rejected", "broken")
+UNRESOLVED_THREADS = ("active", "pending")
+VOTES = {10: "approved", 5: "approved with suggestions", -5: "waiting for author", -10: "rejected"}
+
+Json = dict[str, Any]
+
+
+class AzError(Exception):
+    def __init__(self, message: str, transient: bool) -> None:
+        super().__init__(message)
+        self.transient = transient
+
+
+def log(message: str) -> None:
+    print(f"pr-wait-azure-devops: {message}", file=sys.stderr, flush=True)
+
+
+def fail(message: str, code: int = 2) -> NoReturn:
+    # Fatal messages go to stdout so a monitor shows the agent why it stopped.
+    print(f"pr-wait-azure-devops: {message}", flush=True)
+    sys.exit(code)
+
+
+AZ = shutil.which("az")
+
+
+def az(args: list[str]) -> Any:
+    """Run az and parse its JSON. Retries transient failures with backoff."""
+    if AZ is None:
+        raise AzError("the Azure CLI (az) is not installed or not on PATH", False)
+    # az is a Python program. Force UTF-8 so non-ASCII text cannot break its JSON
+    # on Windows consoles that default to a legacy code page.
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+    delay = 2
+    for attempt in range(5):
+        proc = subprocess.run(
+            [AZ, *args, "-o", "json", "--only-show-errors"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+        )
+        if proc.returncode == 0:
+            return json.loads(proc.stdout or "null")
+        lines = proc.stderr.strip().splitlines()
+        message = lines[-1] if lines else f"az exited {proc.returncode}"
+        transient = bool(TRANSIENT.search(proc.stderr))
+        if not transient or attempt == 4:
+            raise AzError(message, transient)
+        log(f"az {' '.join(args[:3])}: {message}; retry in {delay}s")
+        time.sleep(delay)
+        delay *= 2
+    raise AssertionError("unreachable")
+
+
+def invoke(org: str, area: str, resource: str, route: Json | None = None, query: Json | None = None, version: str = "7.1") -> Any:
+    args = ["devops", "invoke", "--org", org, "--area", area, "--resource", resource, "--api-version", version]
+    if route:
+        args += ["--route-parameters", *(f"{k}={v}" for k, v in route.items())]
+    if query:
+        args += ["--query-parameters", *(f"{k}={v}" for k, v in query.items())]
+    return az(args)
+
+
+def get_pr(org: str, pr: int) -> Json:
+    return az(["repos", "pr", "show", "--org", org, "--id", str(pr)])
+
+
+def org_from_url(url: str) -> str | None:
+    """The organization URL for an Azure DevOps web, HTTPS or SSH address."""
+    patterns = (
+        r"https?://(?:[^@/\s]+@)?dev\.azure\.com/([^/\s]+)",
+        r"(?:ssh://)?git@ssh\.dev\.azure\.com(?::v3|:22/v3)?/([^/\s]+)",
+        r"https?://(?:[^@/\s]+@)?([^./\s]+)\.visualstudio\.com",
+        r"[^@\s]+@vs-ssh\.visualstudio\.com:v3/([^/\s]+)",
+    )
+    for pattern in patterns:
+        match = re.match(pattern, url.strip())
+        if match:
+            return f"https://dev.azure.com/{match.group(1)}"
+    return None
+
+
+def parse_target(raw: str | None, org: str | None) -> tuple[str, int]:
+    if raw is None or not raw.strip():
+        fail("missing PR number. Did a variable expand to nothing? Usage: pr-wait-azure-devops <pr> [--org URL]")
+    raw = raw.strip()
+    url = re.search(r"/pullrequest/(\d+)", raw, re.IGNORECASE)
+    number = re.fullmatch(r"!?#?(\d+)", raw)
+    if url:
+        org = org or org_from_url(raw)
+        pr = int(url.group(1))
+    elif number:
+        pr = int(number.group(1))
+    else:
+        fail(f"'{raw}' is not a PR number or Azure DevOps PR URL")
+    if pr <= 0:
+        fail(f"'{raw}' is not a valid PR number")
+    if not org:
+        remote = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True)
+        org = org_from_url(remote.stdout) if remote.returncode == 0 else None
+        if not org:
+            fail("no --org given and the current checkout has no Azure DevOps origin remote")
+    org = org.rstrip("/")
+    try:
+        get_pr(org, pr)
+    except AzError as error:
+        if not error.transient:  # a transient failure is retried by the poll loop
+            fail(f"cannot read {org} PR {pr}: {error}")
+    return org, pr
+
+
+def lock(key: str) -> Any:
+    """Hold a per-PR lock for the life of the process. The OS drops it on exit."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    handle = open(STATE_DIR / f"{key}.lock", "a+")
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        pid_file = STATE_DIR / f"{key}.pid"
+        pid = pid_file.read_text().strip() if pid_file.exists() else "unknown"
+        fail(
+            f"pid {pid} already watches this PR, so this watcher exits to avoid duplicate "
+            f"events. If no events reach you from it, stop pid {pid} and start again."
+        )
+    (STATE_DIR / f"{key}.pid").write_text(str(os.getpid()))
+    return handle
+
+
+def snippet(text: str, limit: int = 100) -> str:
+    text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text or "")).strip()
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+class Watcher:
+    def __init__(self, org: str, pr: int, until: str, interval: int, key: str) -> None:
+        self.org, self.pr, self.until, self.interval = org, pr, until, interval
+        self.path = STATE_DIR / f"{key}.json"
+        state = self.load()
+        self.baseline = state is None
+        self.state: Json = state or {"reported": [], "target_oid": None, "merge_status": None}
+        self.reported: set[str] = set(self.state["reported"])
+        self.printed: set[str] = set()
+        self.events = 0
+        self.prev_snapshot: list[tuple[str, str]] | None = None
+        self.pr_files: dict[str, set[str]] = {}
+        self.me = self.signed_in_user()
+
+    def load(self) -> Json | None:
+        try:
+            if time.time() - self.path.stat().st_mtime > STALE_STATE_SECONDS:
+                return None
+            return json.loads(self.path.read_text())
+        except (OSError, ValueError):
+            return None
+
+    def save(self) -> None:
+        self.state["reported"] = sorted(self.reported)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.state))
+        tmp.replace(self.path)
+
+    def say(self, line: str) -> None:
+        if line not in self.printed:
+            self.printed.add(line)
+            print(f"!{self.pr} {line}", flush=True)
+
+    def emit(self, key: str, line: str) -> None:
+        """Print an event once per PR, across restarts."""
+        if key in self.reported:
+            return
+        self.reported.add(key)
+        if not self.baseline:
+            self.events += 1
+            self.say(line)
+
+    def finish(self, code: int, lines: Sequence[str] = ()) -> NoReturn:
+        for line in lines:
+            self.say(line)
+        self.save()
+        sys.exit(code)
+
+    def signed_in_user(self) -> str:
+        try:
+            return (az(["account", "show", "--query", "user.name"]) or "").lower()
+        except AzError:
+            return ""  # PAT sign-in has no account; the PR author still counts as mine
+
+    def changed_files(self, project: str, repo: str, old: str, new: str) -> set[str]:
+        diff = invoke(
+            self.org, "git", "commitDiffs", {"project": project, "repositoryId": repo},
+            {"baseVersion": old, "baseVersionType": "commit", "targetVersion": new, "targetVersionType": "commit", "$top": 2000},
+        )
+        return {c["item"]["path"] for c in diff.get("changes", []) if not c["item"].get("isFolder")}
+
+    def base_overlap(self, pr: Json, old: str, new: str) -> list[str]:
+        """Files this PR touches that the new target commits also touch."""
+        project, repo = pr["repository"]["project"]["id"], pr["repository"]["id"]
+        head = pr["lastMergeSourceCommit"]["commitId"]
+        try:
+            # The diffs API compares from the common ancestor, so old...head is
+            # this PR's own change and old...new is what landed on the target.
+            if head not in self.pr_files:
+                self.pr_files[head] = self.changed_files(project, repo, old, head)
+            moved = self.changed_files(project, repo, old, new)
+        except AzError as error:
+            log(f"could not compare target commits: {error}")
+            return []
+        return sorted(self.pr_files[head].intersection(moved))
+
+    def poll(self) -> None:
+        pr = get_pr(self.org, self.pr)
+        project = pr["repository"]["project"]
+        web = f"{self.org}/{quote(project['name'])}/_git/{quote(pr['repository']['name'])}/pullrequest/{self.pr}"
+        if pr["status"] == "completed":
+            self.finish(0, [f"completed (merged): {web}"])
+        if pr["status"] == "abandoned":
+            self.finish(1, [f"abandoned without merging: {web}"])
+
+        head = pr["lastMergeSourceCommit"]["commitId"]
+        short = head[:7]
+        target = pr["targetRefName"].removeprefix("refs/heads/")
+        mine = {pr["createdBy"].get("uniqueName", "").lower(), pr["createdBy"]["id"], self.me}
+        self.events = 0
+
+        # Policies. An evaluation counts only when it ran on the current head
+        # and has not expired.
+        evaluations = invoke(
+            self.org, "policy", "evaluations", {"project": project["id"]},
+            {"artifactId": f"vstfs:///CodeReview/CodeReviewId/{project['id']}/{self.pr}"},
+            "7.1-preview",
+        ).get("value", [])
+        policies: dict[str, Json] = {}
+        for evaluation in evaluations:
+            config = evaluation["configuration"]
+            if not config.get("isEnabled", True) or config.get("isDeleted"):
+                continue
+            context = evaluation.get("context") or {}
+            settings = config.get("settings") or {}
+            name = settings.get("displayName") or context.get("buildDefinitionName") or config["type"]["displayName"]
+            current = context.get("lastMergeSourceCommitId") in (None, head) and not context.get("isExpired")
+            status = (evaluation.get("status") or "queued").lower()
+            build = context.get("buildId")
+            policies[name] = {
+                "blocking": config.get("isBlocking", False),
+                "check": config["type"]["displayName"].lower() in CHECK_POLICY_TYPES,
+                "status": status if current else "pending",
+                "link": f"{self.org}/{quote(project['name'])}/_build/results?buildId={build}" if build else web,
+            }
+
+        checks = {n: p for n, p in policies.items() if p["check"]}
+        gate = {n for n, p in checks.items() if p["blocking"]} or set(checks)
+        others = {n for n, p in policies.items() if p["blocking"] and not p["check"]}
+        label = "required check" if any(checks[n]["blocking"] for n in gate) else "check"
+
+        def done(name: str) -> bool:
+            return policies[name]["status"] in PASSED + FAILED
+
+        fail_lines: list[str] = []
+        for name in sorted(gate):
+            if policies[name]["status"] in FAILED:
+                fail_lines.append(f"{label} failed: {name} {policies[name]['link']}")
+                self.emit(f"fail:{head}:{name}:{policies[name]['link']}", fail_lines[-1])
+        snapshot = sorted((n, p["status"]) for n, p in checks.items())
+        stable = snapshot == self.prev_snapshot
+        self.prev_snapshot = snapshot
+        gate_done = all(done(n) for n in gate)
+        all_done = gate_done and all(done(n) for n in checks)
+        green = gate_done and stable and not fail_lines
+
+        # People talking. Edits and system comments are never events.
+        threads = invoke(
+            self.org, "git", "pullRequestThreads",
+            {"project": project["id"], "repositoryId": pr["repository"]["id"], "pullRequestId": self.pr},
+        ).get("value", [])
+        unresolved: list[str] = []
+        for thread in threads:
+            comments = [c for c in thread.get("comments", []) if c.get("commentType") != "system" and not c.get("isDeleted")]
+            if thread.get("isDeleted") or not comments:
+                continue
+            link = f"{web}?discussionId={thread['id']}"
+            if (thread.get("status") or "").lower() in UNRESOLVED_THREADS:
+                unresolved.append(link)
+            context = thread.get("threadContext") or {}
+            line = (context.get("rightFileStart") or {}).get("line")
+            where = f" on {context['filePath']}{':' + str(line) if line else ''}" if context.get("filePath") else ""
+            for index, comment in enumerate(comments):
+                author = comment.get("author") or {}
+                if (author.get("uniqueName") or "").lower() in mine or author.get("id") in mine:
+                    continue
+                kind = "comment" if not where and index == 0 else "new thread" if index == 0 else "thread reply"
+                self.emit(
+                    f"c:{thread['id']}:{comment['id']}",
+                    f"{kind} from {author.get('displayName', 'unknown')}{where}: {snippet(comment.get('content', ''))} {link}",
+                )
+        for reviewer in pr.get("reviewers", []):
+            vote = reviewer.get("vote", 0)
+            if vote < 0:
+                self.emit(f"vote:{reviewer['id']}:{vote}:{head}", f"review from {reviewer['displayName']} ({VOTES[vote]}) {web}")
+
+        # Target branch and merge status.
+        target_oid = pr["lastMergeTargetCommit"]["commitId"]
+        old_target = self.state["target_oid"]
+        if old_target and target_oid != old_target and not self.baseline:
+            touched = self.base_overlap(pr, old_target, target_oid)
+            if touched:
+                more = f" and {len(touched) - 5} more" if len(touched) > 5 else ""
+                self.emit(
+                    f"base:{target_oid}",
+                    f"{target} moved to {target_oid[:7]} and touches files in this PR: {', '.join(touched[:5])}{more}",
+                )
+        self.state["target_oid"] = target_oid
+        merge_status = pr.get("mergeStatus", "notSet")
+        dirty_line = f"merge conflicts with {target}: rebase or resolve them"
+        if merge_status == "conflicts" and self.state["merge_status"] != merge_status:
+            self.emit(f"merge:conflicts:{head}:{target_oid}", dirty_line)
+        self.state["merge_status"] = merge_status
+
+        # One summary line per head once all checks finish.
+        counts: dict[str, int] = {}
+        for p in checks.values():
+            counts[p["status"]] = counts.get(p["status"], 0) + 1
+        advisory = sorted(f"{n} {p['status']}" for n, p in policies.items() if not p["blocking"])
+        parts = [
+            ", ".join(f"{n} {s}" for s, n in sorted(counts.items())) or "no build policies",
+            f"required {sum(policies[n]['status'] in PASSED for n in gate)}/{len(gate)} green" if gate else "",
+            f"advisory: {', '.join(advisory)}" if advisory else "",
+            f"{len(unresolved)} active threads",
+            f"merge status {merge_status}",
+        ]
+        summary = "; ".join(p for p in parts if p)
+        checks_key = f"checks:{head}"
+
+        if self.until != "any-change":
+            if merge_status == "conflicts":
+                self.finish(1, [dirty_line])
+            if fail_lines:
+                self.finish(1, fail_lines)
+            if green and self.until == "green":
+                self.reported.add(checks_key)
+                self.finish(0, [f"green on {short}: {summary}"])
+            if green:
+                rejected = sorted(n for n in others if policies[n]["status"] in FAILED)
+                if rejected:
+                    self.finish(1, [f"blocked by policy on {short}: {', '.join(rejected)}"])
+                if unresolved:
+                    self.finish(1, [f"blocked by {len(unresolved)} active threads on {short}: {' '.join(unresolved)}"])
+                if all(policies[n]["status"] in PASSED for n in others) and merge_status == "succeeded":
+                    self.reported.add(checks_key)
+                    self.finish(0, [f"ready on {short}: {summary}"])
+        if all_done and (stable or self.baseline):
+            self.emit(checks_key, f"checks finished on {short}: {summary}")
+        if self.until == "any-change" and self.events:
+            self.finish(0)
+
+    def run(self) -> NoReturn:
+        failures = 0
+        while True:
+            try:
+                self.poll()
+                failures = 0
+            except AzError as error:
+                if not error.transient:
+                    self.finish(1, [f"pr-wait-azure-devops stopped: {error}"])
+                failures += 1
+                log(f"poll failed ({failures}/{MAX_FAILED_POLLS}): {error}")
+                if failures >= MAX_FAILED_POLLS:
+                    self.finish(1, [f"pr-wait-azure-devops stopped: Azure DevOps unreachable for {failures} polls: {error}"])
+            else:
+                self.save()
+                if self.baseline:
+                    log(f"baseline recorded for PR {self.pr}; reporting only new events")
+                self.baseline = False
+            time.sleep(self.interval)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="pr-wait-azure-devops", description="Watch an Azure DevOps PR and print one line per real event."
+    )
+    parser.add_argument("pr", nargs="?", help="PR number or URL")
+    parser.add_argument("--org", help="organization URL (default: from the URL or the origin remote)")
+    parser.add_argument("--until", choices=("green", "ready", "any-change"), default="ready")
+    parser.add_argument("--interval", type=int, default=30, help="seconds between polls (default 30, min 10)")
+    args = parser.parse_args()
+    org, pr = parse_target(args.pr, args.org)
+    key = f"azure-devops__{org.rsplit('/', 1)[-1]}__{pr}"
+    _lock = lock(key)
+    log(f"watching {org} PR {pr} until {args.until}")
+    Watcher(org, pr, args.until, max(args.interval, 10), key).run()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)
