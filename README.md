@@ -111,8 +111,10 @@ npx skills add feanz/skills/leaving-pr-comments
 - `file-pr` and `babysit-pr` use `leaving-pr-comments`.
 - `council` requires a harness that can delegate to models from three different
   providers; it reports unavailable providers rather than substituting them.
-- Outside T3 Code, `babysit-pr` uses its bundled executable `scripts/pr-wait`
-  and requires Python 3 and an authenticated GitHub CLI (`gh`).
+- In T3 Code, `babysit-pr` uses `watch_pull_request` for both GitHub and Azure
+  DevOps. Outside T3 Code, its bundled scripts require Python 3 and either an
+  authenticated GitHub CLI (`gh`) for `scripts/pr-wait`, or the Azure CLI with
+  the `azure-devops` extension for `scripts/pr-wait-azure-devops`.
 
 The [Agent Skills specification](https://agentskills.io/specification) supports
 instructions that reference other files, but does not define remote skill aliases
@@ -156,10 +158,10 @@ There are two local customizations:
 
 - `sol-loop/SKILL.md`: use the latest available Sol at **high effort** unless
   the user chooses another effort, and report when high effort is unavailable.
-- `babysit-pr`: Azure DevOps support. `scripts/pr-wait-azure-devops` is a local
-  addition that waits on Azure DevOps branch policy evaluations, and
-  `babysit-pr/SKILL.md` chooses it for Azure DevOps PRs. The upstream
-  `scripts/pr-wait` is unchanged.
+- `babysit-pr`: Azure DevOps support outside T3 Code.
+  `scripts/pr-wait-azure-devops` is a local addition that waits on Azure DevOps
+  branch policy evaluations. In T3 Code, `babysit-pr/SKILL.md` uses the native
+  watcher for both hosts. The upstream `scripts/pr-wait` is unchanged.
 
 These preserve intentional local behavior rather than silently reverting it
 during synchronization.

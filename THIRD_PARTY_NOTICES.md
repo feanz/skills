@@ -10,7 +10,8 @@ executable and upstream `agents/openai.yaml` files where supplied.
 All imported files are unchanged from that revision except `sol-loop/SKILL.md`,
 which retains this repository's preference for high effort unless the user
 specifies another effort, and reporting when high effort is unavailable, and
-`babysit-pr/SKILL.md`, which adds Azure DevOps support. The
+`babysit-pr/SKILL.md`, which adds an Azure DevOps CLI fallback outside T3 Code
+and uses T3 Code's native watcher for both hosts. The
 `babysit-pr/scripts/pr-wait-azure-devops` script is original to this
 repository, not imported.
 The local `file-pr/agents/openai.yaml` and `babysit-pr/agents/openai.yaml`
