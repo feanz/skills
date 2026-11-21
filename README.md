@@ -46,7 +46,7 @@ npx skills add t3dotgg/tstack --skill file-pr babysit-pr sol-loop full-send full
 ```
 
 Choose one source for these names; do not install both copies. Direct upstream
-installation does not include this repository's Sol High customization. For
+installation does not include this repository's Sol High and fast mode customization. For
 personal defaults with unmodified upstream skills, put the preference in your
 user-level `AGENTS.md` or `CLAUDE.md`, as upstream recommends.
 
@@ -156,8 +156,9 @@ and agent metadata. Existing local `file-pr` and `babysit-pr` UI metadata is ret
 
 There are two local customizations:
 
-- `sol-loop/SKILL.md`: use the latest available Sol at **high effort** unless
-  the user chooses another effort, and report when high effort is unavailable.
+- `sol-loop/SKILL.md`: use the latest available Sol at **high effort** and in
+  **fast mode** (priority service tier) unless the user chooses otherwise, and
+  report when either is unavailable.
 - `babysit-pr`: Azure DevOps support outside T3 Code.
   `scripts/pr-wait-azure-devops` is a local addition that waits on Azure DevOps
   branch policy evaluations. In T3 Code, `babysit-pr/SKILL.md` uses the native

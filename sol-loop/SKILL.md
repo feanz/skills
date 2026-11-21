@@ -47,8 +47,11 @@ missing or pre-failing checks in the brief.
 
 In T3, call `orchestrator_capabilities`. Pick the latest Sol unless the user
 named a version. Do not hardcode an ID. Run it on high effort (Sol High) on
-every route, unless the user named another effort. If high is not exposed,
-say so. Record provider, model, and effort only if exposed. Use `delegate_task` every round (`role: "review"`,
+every route, unless the user named another effort. Always pass effort
+explicitly; a model's default can be lower. Also run it in fast mode: the priority
+service tier (in T3, `serviceTier: "priority"`), unless the user said not to.
+If high effort or fast mode is not exposed, say so. Record provider, model,
+effort, and tier only if exposed. Use `delegate_task` every round (`role: "review"`,
 `mode: "async"`). Save `taskId`. New `clientRequestId` per round.
 `childThreadId` is storage, not the next target. Do not use
 `t3_thread_send`, `create_threads`, or `t3_thread_launch` for review.
